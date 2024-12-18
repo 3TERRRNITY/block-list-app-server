@@ -5,36 +5,64 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Res,
+  UseGuards,
 } from '@nestjs/common';
 import { GetSessionInfoDto, SignInBodyDto, SignUpBodyDto } from './dto';
 import { ApiCreatedResponse, ApiResponseProperty } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
+import { Response } from 'express';
+import { CookieService } from './cookie.service';
+import { AuthGuard } from './auth.guard';
+import { SessionInfo } from './session-info.decorator';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private cookieService: CookieService,
+  ) {}
 
   @Post('sign-up')
   @ApiCreatedResponse()
-  signUp(@Body() body: SignUpBodyDto) {
-    return this.authService.signUp(body.email, body.password);
+  async signUp(
+    @Body() body: SignUpBodyDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { accessToken } = await this.authService.signUp(
+      body.email,
+      body.password,
+    );
+    this.cookieService.setToken(res, accessToken);
   }
+
   @Post('sign-in')
   @ApiCreatedResponse()
   @HttpCode(HttpStatus.OK)
-  signIn(@Body() body: SignInBodyDto) {
-    return null;
+  async signIn(
+    @Body() body: SignInBodyDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { accessToken } = await this.authService.signIn(
+      body.email,
+      body.password,
+    );
+    this.cookieService.setToken(res, accessToken);
   }
   @Post('sign-out')
   @ApiResponseProperty()
+  @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.OK)
-  signOut() {}
+  signOut(@Res({ passthrough: true }) res: Response) {
+    this.cookieService.removeToken(res);
+  }
 
   @Get('get-session')
   @ApiResponseProperty({
     type: GetSessionInfoDto,
   })
-  getSessionInfo() {
-    return null;
+  @UseGuards(AuthGuard)
+  getSessionInfo(@SessionInfo() session: GetSessionInfoDto) {
+    return session;
   }
 }
